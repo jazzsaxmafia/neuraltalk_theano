@@ -73,26 +73,37 @@ X = T.concatenate([embedded_image, embedded_sentence], axis=0)
 '''
 LSTM weight ( i, f, c, o에 대한 weight들 )
 을 정의하자
+
+
+
 '''
-Wi = initializations.orthogonal((word_embedding_dim, word_embedding_dim))
-Wf = initializations.orthogonal((word_embedding_dim, word_embedding_dim))
-Wc = initializations.orthogonal((word_embedding_dim, word_embedding_dim))
-Wo = initializations.orthogonal((word_embedding_dim, word_embedding_dim))
+def numpy_floatX(data):
+    return np.asarray(data, dtype=theano.config.floatX)
 
-bi = initializations.zero((word_embedding_dim))
-bf = initializations.zero((word_embedding_dim))
-bc = initializations.zero((word_embedding_dim))
-bo = initializations.zero((word_embedding_dim))
+WLSTM = initializations.uniform((1+word_embedding_dim*2, 4*word_embedding_dim))
 
-xi = T.dot(X, Wi) + bi
-xf = T.dot(X, Wf) + bf
-xc = T.dot(X, Wc) + bc
-xo = T.dot(X, Wo) + bo
+bias = T.alloc(numpy_floatX(1.), 1)
 
-def _step():
-    it = T.nnet.sigmoid(x
-    pass
+def _step(b, x_t, h_t_1, weight):
+    Hin = T.concatenate([b, x_t, h_t_1])
+    IFOG = T.dot(Hin, weight)
 
+    ifo = T.nnet.sigmoid(IFOG[:3*hidden_size])
+    g = T.tanh(IFOG[3*hidden_size:])
+
+    IFOGf = T.concatenate([ifo, g])
+
+    c = IFOGf[:hidden_size] * IFOGf[3*hidden_size:]
+
+    Hout = IFOGf[2*hidden_size:3*hidden_size] * c
+    return Hout
+
+rval, updates = theano.scan(fn = lambda x, h, b, weight: _step(b,x,h,weight),
+                   sequences=[X],
+                   outputs_info=[T.alloc(numpy_floatX(0.),hidden_size)],
+                   non_sequences=[bias, WLSTM])
+
+ff = theano.function(inputs=[image, sentence], outputs=rval[0], allow_input_downcast=True)
 
 '''
 Test
