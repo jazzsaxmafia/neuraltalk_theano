@@ -19,6 +19,7 @@ word_embedding_dim = 256
 image_embedding_dim= 256
 hidden_size = 256
 batch_size = 100
+num_epochs=100
 
 parser = argparse.ArgumentParser()
 dp = getDataProvider(dataset)
@@ -92,12 +93,25 @@ def _step(b, x_t, h_t_1, m_, c_, weight):
 
     IFOGf = T.concatenate([ifo, g], axis=1)
 
-    c = IFOGf[:, :hidden_size] * IFOGf[:, 3*hidden_size:]
+    c = IFOGf[:, :hidden_size] * IFOGf[:, 3*hidden_size:] + c_ * IFOGf[:,hidden_size:2*hidden_size]
     c = c * m_[:,None] + c_ * (1. - m_)[:,None]
 
     Hout = IFOGf[:, 2*hidden_size:3*hidden_size] * c
     Hout = Hout * m_[:,None] + h_t_1*(1. - m_)[:,None]
     return Hout, c
+
+def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6):
+     grads = T.grad(cost=cost, wrt=params)
+     updates = []
+     for p, g in zip(params, grads):
+         acc = theano.shared(p.get_value() * 0.)
+         acc_new = rho * acc + (1 - rho) * g ** 2
+         gradient_scaling = T.sqrt(acc_new + epsilon)
+         g = g / gradient_scaling
+         updates.append((acc, acc_new))
+         updates.append((p, p - lr * g))
+     return updates
+
 
 (Houts, cells), updates = theano.scan(fn = lambda x, m, h, c, b, weight: _step(b,x,h, m, c, weight),
                    sequences=[X, mask.T],
@@ -109,19 +123,19 @@ def _step(b, x_t, h_t_1, m_, c_, weight):
                    non_sequences=[bias, WLSTM])
 
 Houts = Houts.dimshuffle(1,0,2)
-f_hout = theano.function(inputs=[image, sentence, mask], outputs=Houts, allow_input_downcast=True)
 Y, updates = theano.scan(fn=lambda hout, wd,dd: T.nnet.softmax(T.dot(hout, wd)+dd),
                          sequences=[Houts],
                          non_sequences=[Wd,bd])
 
-function_y = theano.function(inputs=[image, sentence, mask], outputs=Y, allow_input_downcast=True)
 Y = Y[:,1:-1,:]
 n_timestep=Y.shape[1]
 
 losses,_ = theano.scan(fn=lambda y, m, sen: -T.log(y[T.arange(n_timestep), sen[1:]][mask != 0.0]),
                        sequences=[Y, mask, sentence])
-function_x = theano.function(inputs=[image, sentence], outputs=X, allow_input_downcast=True)
-f_losses = theano.function(inputs=[image, sentence, mask], outputs=losses, allow_input_downcast=True)
+loss = T.mean(losses)
+params = [We, be, Ws, WLSTM, Wd, bd]
+updates = RMSprop(cost=loss, params=params)
+train = theano.function(inputs=[image, sentence, mask], outputs=losses, updates=updates, allow_input_downcast=True)
 
 '''
 sentence/tag를 추출하고, minibatch에 맞게 padding해줌
@@ -140,14 +154,26 @@ def prepare_sentence(batches):
     return sentence_vec, mask
 
 '''
-Test
+Train
 '''
-print_x = theano.function(inputs=[image, sentence], outputs=X, allow_input_downcast=True)
-print_image = theano.function(inputs=[image], outputs=embedded_image, allow_input_downcast=True)
-print_sentence=theano.function(inputs=[sentence], outputs=embedded_sentence, allow_input_downcast=True)
+iteration=0
+for epoch in range(num_epochs):
+    for batch in dp.iterImageSentencePairBatch(max_batch_size=batch_size):
 
-batches = [dp.sampleImageSentencePair() for i in xrange(batch_size)]
-image_feats = np.array(map(lambda x: x['image']['feat'].astype(theano.config.floatX), batches))
-sentence_vec, ma = prepare_sentence(batches)
+        image_feats = np.array(map(lambda x: x['image']['feat'].astype(theano.config.floatX), batch))
+        sentence_vec, ma = prepare_sentence(batch)
+
+        cost = train(image_feats, sentence_vec, ma)
+
+        if np.mod(iteration, 1000) == 0:
+            print "Saving model... iteration: ", iteration
+            np.savez('./cv/checkpoint_'+str(iteration), We=We.get_value(),
+                                                        be=be.get_value(),
+                                                        Ws=Ws.get_value(),
+                                                        WLSTM=WLSTM.get_value(),
+                                                        Wd=Wd.get_value(),
+                                                        bd=bd.get_value())
+
+        iteration += 1
 
 houts_test = f_hout(image_feats, sentence_vec, ma)
