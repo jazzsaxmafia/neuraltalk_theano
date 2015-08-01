@@ -100,6 +100,8 @@ class LSTMGenerator:
       else:
         Hout[t] = IFOGf[t,2*d:3*d] * C[t]
 
+      print Hout
+
     if drop_prob_decoder > 0: # if we want dropout on the decoder
       if not predict_mode: # and we are in training mode
         scale2 = 1.0 / (1.0 - drop_prob_decoder)

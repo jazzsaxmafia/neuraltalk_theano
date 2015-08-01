@@ -74,9 +74,8 @@ def build_test_function(checkpoint_file, database, ixtoword_path, hidden_size):
 def test_main():
 
     dataset = 'flickr30k'
-    checkpoint_file = os.path.join(checkpoint_path,'checkpoint_62000.npz')
+    checkpoint_file = os.path.join(checkpoint_path,'checkpoint_3000.npz')
     ixtoword_path = os.path.join(checkpoint_path, 'ixtoword')
-    hidden_size = 256
 
     with open(ixtoword_path) as f: ixtoword = cPickle.load(f)
     test_function = build_test_function(checkpoint_file, dataset, ixtoword_path, hidden_size)

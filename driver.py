@@ -206,7 +206,7 @@ def main(params):
     if it == 0: smooth_train_ppl2 = train_ppl2 # start out where we start out
     epoch = it * 1.-1 / num_iters_one_epoch
     print '%d/%d batch done in %.3fs. at epoch %.2f. loss cost = %f, reg cost = %f, ppl2 = %.2f (smooth %.2f)' \
-          % (it, max_iters, dt, epoch, cost['loss_cost'], cost['reg_cost'], \
+          % (it, max_iters, dt, epoch, cost['loss_cost'] / batch_size, cost['reg_cost'], \
              train_ppl2, smooth_train_ppl2)
 
     # perform gradient check if desired, with a bit of a burnin time (10 iterations)
