@@ -32,7 +32,7 @@ def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6):
 
     return updates
 
-def dropout(X):
+def dropout(X, dropout_prob=0.0):
     if dropout_prob > 0.0:
         X *= srng.binomial(p=dropout_prob, dtype=theano.config.floatX, size=X.shape)
         X /= dropout_prob
@@ -76,7 +76,7 @@ def build_model(dp, word_count_threshold, word_embedding_dim, image_embedding_di
     '''
     X = T.concatenate([embedded_image, embedded_sentence], axis=1)
     X = X.dimshuffle(1,0,2)
-    X = dropout(X)
+    X = dropout(X, 0.5)
 
     '''
     LSTM weight ( i, f, c, o에 대한 weight들 )
@@ -204,7 +204,6 @@ def train():
 
             print cost
             print Houts
-            ipdb.set_trace()
 
             if np.mod(iteration, 1000) == 0:
                 print "Saving model... iteration: ", iteration
